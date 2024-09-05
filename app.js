@@ -1,8 +1,17 @@
 const express = require('express');
 const { CosmosClient } = require('@azure/cosmos');
+const cors = require('cors'); // Import the cors package
 
 const app = express();
 const port = process.env.PORT || 8080;
+
+// Configure CORS options
+const corsOptions = {
+    origin: 'https://yourin.site', // Allow only this origin
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed HTTP methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
+    credentials: true, // Allow cookies (if needed)
+};
 
 // Set up Cosmos DB connection
 const endpoint = process.env.COSMOS_DB_ENDPOINT;
@@ -13,6 +22,9 @@ const containerId = 'pageanalytics';
 const client = new CosmosClient({ endpoint, key });
 const database = client.database(databaseId);
 const container = database.container(containerId);
+
+// Use the cors middleware with the specified options
+app.use(cors(corsOptions));
 
 // Middleware to parse JSON bodies
 app.use(express.json());
