@@ -2,7 +2,7 @@ const express = require('express');
 const { CosmosClient } = require('@azure/cosmos');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 8080;
 
 // Set up Cosmos DB connection
 const endpoint = process.env.COSMOS_DB_ENDPOINT;
