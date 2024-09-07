@@ -17,12 +17,10 @@ const corsOptions = {
 const endpoint = process.env.COSMOS_DB_ENDPOINT;
 const key = process.env.COSMOS_DB_KEY;
 const databaseId = 'RTP';
-const containerId = 'pageanalytics';
 const aggContainerId = 'pageanalytics_aggregated'; // Aggregated container
 
 const client = new CosmosClient({ endpoint, key });
 const database = client.database(databaseId);
-const container = database.container(containerId);
 const aggContainer = database.container(aggContainerId); // Access aggregated data container
 
 // Use the cors middleware with the specified options
@@ -31,37 +29,38 @@ app.use(cors(corsOptions));
 // Middleware to parse JSON bodies
 app.use(express.json());
 
-// Route to handle event tracking from client-side JavaScript (existing)
-app.post('/api/event', async (req, res) => {
-    const eventData = req.body;
-    
-    // Make sure to add a unique ID to each event
-    eventData.id = `event_${Date.now()}`;
-    
-    try {
-        // Insert the event data into Cosmos DB
-        const { resource: createdItem } = await container.items.create(eventData);
-        res.status(201).json(createdItem);
-    } catch (error) {
-        console.error('Error saving event to Cosmos DB:', error);
-        res.status(500).json({ error: 'Failed to save event data' });
-    }
-});
-
-// Route to retrieve aggregated page analytics (new route)
+// Route to retrieve aggregated page analytics
 app.get('/api/aggregated-data', async (req, res) => {
     const { page, date } = req.query; // Assume query params for filtering by page and date
 
     try {
+        // Define a query to get records for the specific page and date
         const querySpec = {
-            query: 'SELECT * FROM c WHERE c.page = @page',
+            query: 'SELECT * FROM c WHERE c.page = @page AND c.date = @date',
             parameters: [
-                { name: '@page', value: page }
+                { name: '@page', value: page },
+                { name: '@date', value: date }
             ]
         };
         
+        // Query the Cosmos DB container for the aggregated data
         const { resources: aggregatedData } = await aggContainer.items.query(querySpec).fetchAll();
-        res.status(200).json(aggregatedData);
+
+        // Initialize variables to hold the sums
+        let totalPageViews = 0;
+        let totalDistinctUsers = 0;
+
+        // Loop through the records and sum the page_loads and distinct_users
+        aggregatedData.forEach(item => {
+            totalPageViews += item.page_loads || 0;
+            totalDistinctUsers += item.distinct_users || 0;
+        });
+
+        // Return the aggregated data back to the client
+        res.status(200).json({
+            totalPageViews,
+            totalDistinctUsers
+        });
     } catch (error) {
         console.error('Error querying aggregated data from Cosmos DB:', error);
         res.status(500).json({ error: 'Failed to retrieve aggregated data' });
