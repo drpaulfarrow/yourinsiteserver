@@ -18,10 +18,12 @@ const endpoint = process.env.COSMOS_DB_ENDPOINT;
 const key = process.env.COSMOS_DB_KEY;
 const databaseId = 'RTP';
 const containerId = 'pageanalytics';
+const aggContainerId = 'pageanalytics_aggregated'; // Aggregated container
 
 const client = new CosmosClient({ endpoint, key });
 const database = client.database(databaseId);
 const container = database.container(containerId);
+const aggContainer = database.container(aggContainerId); // Access aggregated data container
 
 // Use the cors middleware with the specified options
 app.use(cors(corsOptions));
@@ -29,7 +31,7 @@ app.use(cors(corsOptions));
 // Middleware to parse JSON bodies
 app.use(express.json());
 
-// Route to handle event tracking from client-side JavaScript
+// Route to handle event tracking from client-side JavaScript (existing)
 app.post('/api/event', async (req, res) => {
     const eventData = req.body;
     
@@ -46,7 +48,27 @@ app.post('/api/event', async (req, res) => {
     }
 });
 
-// Example route to retrieve events by session ID
+// Route to retrieve aggregated page analytics (new route)
+app.get('/api/aggregated-data', async (req, res) => {
+    const { page, date } = req.query; // Assume query params for filtering by page and date
+
+    try {
+        const querySpec = {
+            query: 'SELECT * FROM c WHERE c.page = @page',
+            parameters: [
+                { name: '@page', value: page }
+            ]
+        };
+        
+        const { resources: aggregatedData } = await aggContainer.items.query(querySpec).fetchAll();
+        res.status(200).json(aggregatedData);
+    } catch (error) {
+        console.error('Error querying aggregated data from Cosmos DB:', error);
+        res.status(500).json({ error: 'Failed to retrieve aggregated data' });
+    }
+});
+
+// Example route to retrieve events by session ID (existing)
 app.get('/api/events/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     
