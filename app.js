@@ -50,35 +50,42 @@ app.post('/api/event', async (req, res) => {
 
 // Route to retrieve aggregated page analytics
 app.get('/api/aggregated-data', async (req, res) => {
-    const { page, date } = req.query; // Assume query params for filtering by page and date
-
+    const { page, date, hour } = req.query; // Now also filters by hour
+    
     try {
-        // Define a query to get records for the specific page and date
+        // Define a query to get records for the specific page, date, and hour (optional)
         const querySpec = {
-            query: 'SELECT * FROM c WHERE c.page = @page AND c.date = @date',
+            query: 'SELECT * FROM c WHERE c.page = @page AND c.date = @date AND c.hour = @hour',
             parameters: [
                 { name: '@page', value: page },
-                { name: '@date', value: date }
+                { name: '@date', value: date },
+                { name: '@hour', value: parseInt(hour, 10) } // Parse hour as integer
             ]
         };
-        
+
         // Query the Cosmos DB container for the aggregated data
         const { resources: aggregatedData } = await aggContainer.items.query(querySpec).fetchAll();
 
         // Initialize variables to hold the sums
         let totalPageViews = 0;
         let totalDistinctUsers = 0;
+        let totalNewUsers = 0;
+        let totalCumulativeDailyDistinctUsers = 0;
 
-        // Loop through the records and sum the page_loads and distinct_users
+        // Loop through the records and sum the relevant fields
         aggregatedData.forEach(item => {
             totalPageViews += item.page_loads || 0;
             totalDistinctUsers += item.distinct_users || 0;
+            totalNewUsers += item.new_users || 0;
+            totalCumulativeDailyDistinctUsers += item.cumulative_daily_distinct_users || 0;
         });
 
         // Return the aggregated data back to the client
         res.status(200).json({
             totalPageViews,
-            totalDistinctUsers
+            totalDistinctUsers,
+            totalNewUsers,
+            totalCumulativeDailyDistinctUsers
         });
     } catch (error) {
         console.error('Error querying aggregated data from Cosmos DB:', error);
