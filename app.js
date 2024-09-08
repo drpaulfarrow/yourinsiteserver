@@ -50,42 +50,60 @@ app.post('/api/event', async (req, res) => {
 
 // Route to retrieve aggregated page analytics
 app.get('/api/aggregated-data', async (req, res) => {
-    const { page, date, hour } = req.query; // Now also filters by hour
-    
+    const { page, date } = req.query; // We query by page and date only
+
     try {
-        // Define a query to get records for the specific page, date, and hour (optional)
+        // Define a query to get records for the specific page and date
         const querySpec = {
-            query: 'SELECT * FROM c WHERE c.page = @page AND c.date = @date AND c.hour = @hour',
+            query: 'SELECT * FROM c WHERE c.page = @page AND c.date = @date',
             parameters: [
                 { name: '@page', value: page },
-                { name: '@date', value: date },
-                { name: '@hour', value: parseInt(hour, 10) } // Parse hour as integer
+                { name: '@date', value: date }
             ]
         };
 
         // Query the Cosmos DB container for the aggregated data
         const { resources: aggregatedData } = await aggContainer.items.query(querySpec).fetchAll();
 
-        // Initialize variables to hold the sums
+        // Initialize variables to hold the totals
         let totalPageViews = 0;
         let totalDistinctUsers = 0;
         let totalNewUsers = 0;
         let totalCumulativeDailyDistinctUsers = 0;
 
-        // Loop through the records and sum the relevant fields
+        // Create an array to store hourly data
+        const hourlyData = Array(24).fill(null).map((_, hour) => ({
+            hour,
+            page_loads: 0,
+            distinct_users: 0,
+            new_users: 0,
+            cumulative_daily_distinct_users: 0
+        }));
+
+        // Loop through the records and group data by hour
         aggregatedData.forEach(item => {
+            const hour = item.hour;
+
+            // Sum the fields for the hour
+            hourlyData[hour].page_loads += item.page_loads || 0;
+            hourlyData[hour].distinct_users += item.distinct_users || 0;
+            hourlyData[hour].new_users += item.new_users || 0;
+            hourlyData[hour].cumulative_daily_distinct_users += item.cumulative_daily_distinct_users || 0;
+
+            // Add to totals
             totalPageViews += item.page_loads || 0;
             totalDistinctUsers += item.distinct_users || 0;
             totalNewUsers += item.new_users || 0;
             totalCumulativeDailyDistinctUsers += item.cumulative_daily_distinct_users || 0;
         });
 
-        // Return the aggregated data back to the client
+        // Return the aggregated data in the correct format
         res.status(200).json({
             totalPageViews,
             totalDistinctUsers,
             totalNewUsers,
-            totalCumulativeDailyDistinctUsers
+            totalCumulativeDailyDistinctUsers,
+            aggregatedHourlyData: hourlyData
         });
     } catch (error) {
         console.error('Error querying aggregated data from Cosmos DB:', error);
