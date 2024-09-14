@@ -1,3 +1,6 @@
+if (process.env.NODE_ENV !== 'production') {
+    require('dotenv').config();
+}
 const express = require('express');
 const { CosmosClient } = require('@azure/cosmos');
 const cors = require('cors');
@@ -6,13 +9,25 @@ const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 8080;
 
-// Configure CORS options
 const corsOptions = {
-    origin: 'https://yourin.site',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
+    origin: function (origin, callback) {
+        // Allow requests from 'null' origin (file://), localhost, and your production domain
+        if (!origin || origin === 'https://yourin.site' || origin === 'null' || origin.includes("localhost")) {
+            callback(null, true); // Allow the request
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Allowed HTTP methods
+    allowedHeaders: ['Content-Type', 'Authorization'], // Allowed headers
+    credentials: true, // Allow credentials (cookies, authorization headers, etc.)
 };
+
+// Apply CORS middleware globally to all routes
+app.use(cors(corsOptions));
+
+// Handle preflight OPTIONS requests globally
+app.options('*', cors(corsOptions));
 
 // Set up Cosmos DB connection
 const endpoint = process.env.COSMOS_DB_ENDPOINT;
@@ -25,9 +40,6 @@ const client = new CosmosClient({ endpoint, key });
 const database = client.database(databaseId);
 const container = database.container(containerId);
 const aggContainer = database.container(aggContainerId);
-
-// Use the cors middleware with the specified options
-app.use(cors(corsOptions));
 
 // Middleware to parse JSON bodies
 app.use(express.json());
