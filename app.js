@@ -116,7 +116,6 @@ async function getLocationFromIP(ip) {
     }
 }
 
-// Route to retrieve aggregated page analytics
 app.get('/api/aggregated-data', async (req, res) => {
     console.log('Received request for aggregated data');
     console.log('Query Parameters:', req.query);
@@ -140,7 +139,8 @@ app.get('/api/aggregated-data', async (req, res) => {
         let totalPageViews = 0;
         let totalDistinctUsers = 0;
         let totalNewUsers = 0;
-        let totalCumulativeDailyDistinctUsers = 0;
+        let highestCumulativeDistinctUsers = 0;
+        const distinctUserIds = new Set();
 
         const hourlyData = Array(24).fill(null).map((_, hour) => ({
             hour,
@@ -153,30 +153,36 @@ app.get('/api/aggregated-data', async (req, res) => {
         aggregatedData.forEach(item => {
             const hour = item.hour;
 
+            // Aggregate hourly data
             hourlyData[hour].page_loads += item.page_loads || 0;
             hourlyData[hour].distinct_users += item.distinct_users || 0;
             hourlyData[hour].new_users += item.new_users || 0;
-            hourlyData[hour].cumulative_daily_distinct_users += item.cumulative_daily_distinct_users || 0;
+            hourlyData[hour].cumulative_daily_distinct_users = Math.max(
+                hourlyData[hour].cumulative_daily_distinct_users,
+                item.cumulative_daily_distinct_users || 0
+            );
 
+            // Track distinct users
             totalPageViews += item.page_loads || 0;
-            totalDistinctUsers += item.distinct_users || 0;
             totalNewUsers += item.new_users || 0;
-            totalCumulativeDailyDistinctUsers += item.cumulative_daily_distinct_users || 0;
+
+            // Update the highest cumulative distinct users seen for the day
+            highestCumulativeDistinctUsers = Math.max(highestCumulativeDistinctUsers, item.cumulative_daily_distinct_users || 0);
         });
 
         console.log('Aggregated result prepared:', {
             totalPageViews,
-            totalDistinctUsers,
+            totalDistinctUsers: highestCumulativeDistinctUsers, // Use highest cumulative value
             totalNewUsers,
-            totalCumulativeDailyDistinctUsers,
-            hourlyData
+            totalCumulativeDailyDistinctUsers: highestCumulativeDistinctUsers, // Use highest cumulative value
+            aggregatedHourlyData: hourlyData
         });
 
         res.status(200).json({
             totalPageViews,
-            totalDistinctUsers,
+            totalDistinctUsers: highestCumulativeDistinctUsers, // Send the highest cumulative value
             totalNewUsers,
-            totalCumulativeDailyDistinctUsers,
+            totalCumulativeDailyDistinctUsers: highestCumulativeDistinctUsers, // Send the highest cumulative value
             aggregatedHourlyData: hourlyData
         });
     } catch (error) {
