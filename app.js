@@ -54,16 +54,22 @@ app.use(express.json());
 app.post('/api/event', async (req, res) => {
     console.log('Received event POST request');
     console.log('Request Body:', JSON.stringify(req.body, null, 2));
-    
+
     const eventData = req.body;
-    
+
     // Get client IP from the request
     let clientIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    console.log(`Client IP: ${clientIP}`);
+    console.log(`Client IP (before cleanup): ${clientIP}`);
+
+    // Strip the port number if present (e.g., '81.141.228.123:53835' -> '81.141.228.123')
+    if (clientIP.includes(':')) {
+        clientIP = clientIP.split(':')[0];
+    }
+    console.log(`Client IP (after cleanup): ${clientIP}`);
 
     // Check if the request is coming from a local file system (null origin)
     const isLocalFile = req.headers.origin === 'null';
-    
+
     if (isLocalFile) {
         console.log('Request is from a local file. Using dummy IP.');
         // Assign a dummy IP if the request is from a local file
@@ -81,7 +87,7 @@ app.post('/api/event', async (req, res) => {
 
     eventData.ip_address = clientIP;
     eventData.id = `event_${Date.now()}`;
-    
+
     try {
         console.log('Saving event data to Cosmos DB...');
         const { resource: createdItem } = await container.items.create(eventData);
