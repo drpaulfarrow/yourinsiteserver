@@ -135,12 +135,15 @@ app.get('/api/aggregated-data', async (req, res) => {
         const { resources: aggregatedData } = await aggContainer.items.query(querySpec).fetchAll();
 
         console.log('Aggregated data retrieved:', aggregatedData);
-        
+
         let totalPageViews = 0;
         let totalDistinctUsers = 0;
         let totalNewUsers = 0;
         let highestCumulativeDistinctUsers = 0;
-        const distinctUserIds = new Set();
+
+        const browserMap = {};
+        const osMap = {};
+        const locationMap = {};
 
         const hourlyData = Array(24).fill(null).map((_, hour) => ({
             hour,
@@ -152,7 +155,10 @@ app.get('/api/aggregated-data', async (req, res) => {
 
         aggregatedData.forEach(item => {
             const hour = item.hour;
-
+            const browser = item.browser;
+            const os = item.os;
+            const locationKey = `${item.city}, ${item.country}`;
+            
             // Aggregate hourly data
             hourlyData[hour].page_loads += item.page_loads || 0;
             hourlyData[hour].distinct_users += item.distinct_users || 0;
@@ -168,6 +174,21 @@ app.get('/api/aggregated-data', async (req, res) => {
 
             // Update the highest cumulative distinct users seen for the day
             highestCumulativeDistinctUsers = Math.max(highestCumulativeDistinctUsers, item.cumulative_daily_distinct_users || 0);
+
+            // Aggregate by browser
+            if (browser) {
+                browserMap[browser] = (browserMap[browser] || 0) + item.distinct_users;
+            }
+
+            // Aggregate by OS
+            if (os) {
+                osMap[os] = (osMap[os] || 0) + item.distinct_users;
+            }
+
+            // Aggregate by location
+            if (locationKey) {
+                locationMap[locationKey] = (locationMap[locationKey] || 0) + item.distinct_users;
+            }
         });
 
         console.log('Aggregated result prepared:', {
@@ -175,7 +196,10 @@ app.get('/api/aggregated-data', async (req, res) => {
             totalDistinctUsers: highestCumulativeDistinctUsers, // Use highest cumulative value
             totalNewUsers,
             totalCumulativeDailyDistinctUsers: highestCumulativeDistinctUsers, // Use highest cumulative value
-            aggregatedHourlyData: hourlyData
+            aggregatedHourlyData: hourlyData,
+            browserMap,
+            osMap,
+            locationMap
         });
 
         res.status(200).json({
@@ -183,7 +207,10 @@ app.get('/api/aggregated-data', async (req, res) => {
             totalDistinctUsers: highestCumulativeDistinctUsers, // Send the highest cumulative value
             totalNewUsers,
             totalCumulativeDailyDistinctUsers: highestCumulativeDistinctUsers, // Send the highest cumulative value
-            aggregatedHourlyData: hourlyData
+            aggregatedHourlyData: hourlyData,
+            browserMap,
+            osMap,
+            locationMap
         });
     } catch (error) {
         console.error('Error querying aggregated data from Cosmos DB:', error);
